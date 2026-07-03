@@ -46,6 +46,7 @@ http://127.0.0.1:5001/swagger
 The repository includes `render.yaml` with the Render build and start commands.
 
 ```text
+Python Version: 3.12.7
 Build Command: pip install -r requirements.txt
 Start Command: gunicorn run:app --bind 0.0.0.0:$PORT
 ```
@@ -53,6 +54,12 @@ Start Command: gunicorn run:app --bind 0.0.0.0:$PORT
 In Render, create a new Web Service from this repository. Add `DATABASE_URL` in
 the service environment settings. Render generates `SECRET_KEY` from
 `render.yaml`; if you do not use the blueprint flow, add `SECRET_KEY` manually.
+
+For a manual Web Service deploy, add this environment variable in Render:
+
+```env
+PYTHON_VERSION=3.12.7
+```
 
 `DATABASE_URL` must point to a reachable PostgreSQL database. Without it, the app
 falls back to `POSTGRES_HOST=localhost`, which only works when PostgreSQL is

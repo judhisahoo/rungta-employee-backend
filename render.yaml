@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: rungta-employee
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    preDeployCommand: flask --app run.py db upgrade
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_ACCESS_TOKEN_EXPIRES_MINUTES
+        value: "60"
+      - key: JWT_REFRESH_TOKEN_EXPIRES_DAYS
+        value: "30"

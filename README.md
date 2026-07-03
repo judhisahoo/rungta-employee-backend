@@ -41,6 +41,32 @@ Swagger UI:
 http://127.0.0.1:5001/swagger
 ```
 
+## Deploy To Render
+
+The repository includes `render.yaml` with the Render build and start commands.
+
+```text
+Build Command: pip install -r requirements.txt
+Start Command: gunicorn run:app --bind 0.0.0.0:$PORT
+```
+
+In Render, create a new Web Service from this repository. Add `DATABASE_URL` in
+the service environment settings. Render generates `SECRET_KEY` from
+`render.yaml`; if you do not use the blueprint flow, add `SECRET_KEY` manually.
+
+`DATABASE_URL` must point to a reachable PostgreSQL database. Without it, the app
+falls back to `POSTGRES_HOST=localhost`, which only works when PostgreSQL is
+running locally.
+
+The Render blueprint runs database migrations before each deploy:
+
+```bash
+flask --app run.py db upgrade
+```
+
+To run migrations manually from your machine, first set `DATABASE_URL` to your
+PostgreSQL connection string, then run the same command.
+
 ## Main Endpoints
 
 ```text

@@ -1,0 +1,416 @@
+import base64
+from datetime import datetime
+
+from flask import request
+from flask_restx import Namespace, Resource, fields
+from sqlalchemy.exc import DataError, IntegrityError
+
+from .extensions import db
+from .models import Designation, Employee, Organisation
+
+
+VALID_CATEGORIES = {"Unskilled", "Semi-skilled", "Skilled", "Highly Skilled"}
+VALID_GENDERS = {"male", "female", "transgender"}
+VALID_EMPLOYMENT_TYPES = {"P", "T", "FT", "B"}
+VALID_APP_TYPES = {"sadmin", "admin", "employee"}
+
+organisation_ns = Namespace("Organisations", description="Organisation Management")
+designation_ns = Namespace("Designations", description="Designation Management")
+employee_ns = Namespace("Employees", description="Employee Management")
+
+error_model = organisation_ns.model(
+    "Error",
+    {"message": fields.String(required=True)},
+)
+
+organisation_model = organisation_ns.model(
+    "Organisation",
+    {
+        "id": fields.Integer(readonly=True),
+        "name": fields.String(required=True),
+        "parent_id": fields.Integer,
+        "created_at": fields.String(readonly=True),
+        "updated_at": fields.String(readonly=True),
+    },
+)
+
+designation_model = designation_ns.model(
+    "Designation",
+    {
+        "id": fields.Integer(readonly=True),
+        "name": fields.String(required=True),
+        "created_at": fields.String(readonly=True),
+        "updated_at": fields.String(readonly=True),
+    },
+)
+
+employee_model = employee_ns.model(
+    "Employee",
+    {
+        "id": fields.Integer(readonly=True),
+        "employee_code": fields.String(required=True, description="Unique employee code."),
+        "password": fields.String(readonly=True, description="Password is auto-generated from mobile number and stored in base64 format."),
+        "name": fields.String(required=True, description="Full name of the employee."),
+        "middle_name": fields.String(description="Middle name of the employee."),
+        "surname": fields.String(description="Surname of the employee."),
+        "gender": fields.String(enum=sorted(VALID_GENDERS), description="Gender of the employee."),
+        "guardian_name": fields.String(
+            description="Father's, mother's, or spouse's name."
+        ),
+        "date_of_birth": fields.String(description="Date in YYYY-MM-DD format."),
+        "place_of_birth": fields.String(description="Place of birth."),
+        "nationality": fields.String(description="Nationality of the employee."),
+        "education_level": fields.String(description="Education level of the employee."),
+        "date_of_joining": fields.String(description="Date in YYYY-MM-DD format."),
+        "designation": fields.Integer(description="Designation id."),
+        "category": fields.String(enum=sorted(VALID_CATEGORIES)),
+        "employment_type": fields.String(enum=sorted(VALID_EMPLOYMENT_TYPES)),
+        "mobile_number": fields.String(required=True, description="Mobile number of the employee."),
+        "email": fields.String(required=False, description="Email address of the employee."),
+        "universal_account_number": fields.String(required=False, description="Universal Account Number (UAN) of the employee."),
+        "pan": fields.String(description="PAN number of the employee."),
+        "nominee": fields.String(description="Name of the nominee."),
+        "eps_nps": fields.String(description="EPS/NPS number of the employee."),
+        "family_details": fields.Raw,
+        "posting_details": fields.Raw,
+        "pay": fields.Float(required=True, description="Pay of the employee."),
+        "promotion": fields.String(required=False, description="Promotion details."),
+        "esic_insurance_no": fields.String(description="ESIC insurance number."),
+        "aadhaar_number": fields.String(description="Aadhaar number of the employee."),
+        "bank_account_no": fields.String(description="Bank account number."),
+        "bank_ifsc": fields.String(description="Bank IFSC code."),
+        "branch": fields.String,
+        "present_address": fields.String,
+        "permanent_address": fields.String,
+        "service_book_no": fields.String,
+        "date_of_exit": fields.String(description="Date in YYYY-MM-DD format."),
+        "reason_for_exit": fields.String,
+        "mark_of_identification": fields.String,
+        "photo": fields.String(description="Photo URL, file path, or encoded value."),
+        "specimen_signature_thumb_impression": fields.String,
+        "remarks": fields.String,
+        "organisation_id": fields.Integer(required=True),
+        "employee_app_type": fields.String(enum=sorted(VALID_APP_TYPES)),
+        "created_at": fields.String(readonly=True),
+        "updated_at": fields.String(readonly=True),
+    },
+)
+
+
+def parse_date(value, field_name):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+    if value in ("", "string", "null", "None"):
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        employee_ns.abort(400, "{} must be in YYYY-MM-DD format".format(field_name))
+
+
+def validate_choice(value, valid_values, field_name):
+    if isinstance(value, str):
+        value = value.strip()
+    if value in (None, "", "string", "null", "None"):
+        return value
+    if value not in valid_values:
+        employee_ns.abort(
+            400,
+            "{} must be one of: {}".format(field_name, ", ".join(sorted(valid_values))),
+        )
+    return value
+
+
+def normalize_employee_app_type(value):
+    if isinstance(value, str):
+        value = value.strip()
+    if value in (None, "", "string", "null", "None"):
+        return "employee"
+    if value not in VALID_APP_TYPES:
+        employee_ns.abort(
+            400,
+            "employee_app_type must be one of: {}".format(
+                ", ".join(sorted(VALID_APP_TYPES))
+            ),
+        )
+    return value
+
+
+def build_employee_password(mobile_number):
+    if not mobile_number:
+        return None
+    mobile_number = str(mobile_number).strip()
+    return base64.b64encode(mobile_number.encode("utf-8")).decode("utf-8")
+
+
+def apply_organisation_payload(organisation, payload):
+    if "name" in payload:
+        organisation.name = payload["name"]
+    if "parent_id" in payload:
+        parent_id = payload.get("parent_id")
+        if parent_id in (0, "", None):
+            organisation.parent_id = None
+            return
+        if parent_id == organisation.id:
+            organisation_ns.abort(400, "Organisation cannot be its own parent")
+        if not db.session.get(Organisation, parent_id):
+            organisation_ns.abort(404, "Parent organisation not found")
+        organisation.parent_id = parent_id
+
+
+def apply_designation_payload(designation, payload):
+    if "name" in payload:
+        designation.name = payload["name"]
+
+
+def apply_employee_payload(employee, payload):
+    for field_name in [
+        "employee_code",
+        "name",
+        "middle_name",
+        "surname",
+        "gender",
+        "guardian_name",
+        "place_of_birth",
+        "nationality",
+        "education_level",
+        "mobile_number",
+        "email",
+        "universal_account_number",
+        "pan",
+        "nominee",
+        "eps_nps",
+        "family_details",
+        "posting_details",
+        "pay",
+        "promotion",
+        "esic_insurance_no",
+        "aadhaar_number",
+        "bank_account_no",
+        "bank_ifsc",
+        "branch",
+        "present_address",
+        "permanent_address",
+        "service_book_no",
+        "reason_for_exit",
+        "mark_of_identification",
+        "photo",
+        "specimen_signature_thumb_impression",
+        "remarks",
+    ]:
+        if field_name in payload:
+            setattr(employee, field_name, payload[field_name])
+
+    if "date_of_birth" in payload:
+        employee.date_of_birth = parse_date(payload.get("date_of_birth"), "date_of_birth")
+    if "date_of_joining" in payload:
+        employee.date_of_joining = parse_date(payload.get("date_of_joining"), "date_of_joining")
+    if "date_of_exit" in payload:
+        employee.date_of_exit = parse_date(payload.get("date_of_exit"), "date_of_exit")
+    if "gender" in payload:
+        employee.gender = validate_choice(payload.get("gender"), VALID_GENDERS, "gender")
+    if "designation" in payload:
+        designation_id = payload.get("designation")
+        if designation_id and not db.session.get(Designation, designation_id):
+            employee_ns.abort(404, "Designation not found")
+        employee.designation = designation_id
+    if "category" in payload:
+        employee.category = validate_choice(payload.get("category"), VALID_CATEGORIES, "category")
+    if "employment_type" in payload:
+        employee.employment_type = validate_choice(
+            payload.get("employment_type"),
+            VALID_EMPLOYMENT_TYPES,
+            "employment_type",
+        )
+    if "employee_app_type" in payload:
+        employee.employee_app_type = normalize_employee_app_type(payload.get("employee_app_type"))
+    if "organisation_id" in payload:
+        organisation_id = payload.get("organisation_id")
+        if not db.session.get(Organisation, organisation_id):
+            employee_ns.abort(404, "Organisation not found")
+        employee.organisation_id = organisation_id
+    if "mobile_number" in payload:
+        employee.mobile_number = str(payload.get("mobile_number")).strip()
+        employee.password = build_employee_password(employee.mobile_number)
+    if (
+        not employee.mobile_number 
+        or not str(employee.mobile_number).strip()
+        or str(employee.mobile_number).strip() in ("", "string", "null", "None")
+    ):
+        employee_ns.abort(400, "Mobile number is required")
+
+
+def commit_or_abort(namespace):
+    try:
+        db.session.commit()
+    except IntegrityError as exc:
+        db.session.rollback()
+        namespace.abort(409, "Duplicate or invalid data: {}".format(exc.orig))
+    except DataError as exc:
+        db.session.rollback()
+        namespace.abort(400, "Invalid data: {}".format(exc.orig))
+
+
+@organisation_ns.route("")
+class OrganisationListResource(Resource):
+    @organisation_ns.marshal_list_with(organisation_model)
+    def get(self):
+        """List organisations."""
+        return [organisation.to_dict() for organisation in Organisation.query.order_by(Organisation.id).all()]
+
+    @organisation_ns.expect(organisation_model, validate=True)
+    @organisation_ns.marshal_with(organisation_model, code=201)
+    @organisation_ns.response(409, "Duplicate organisation", error_model)
+    def post(self):
+        """Create an organisation."""
+        payload = request.get_json() or {}
+        organisation = Organisation()
+        apply_organisation_payload(organisation, payload)
+        db.session.add(organisation)
+        commit_or_abort(organisation_ns)
+        return organisation.to_dict(), 201
+
+
+@organisation_ns.route("/<int:organisation_id>")
+@organisation_ns.param("organisation_id", "Organisation id")
+class OrganisationResource(Resource):
+    @organisation_ns.marshal_with(organisation_model)
+    def get(self, organisation_id):
+        """Get an organisation."""
+        organisation = db.session.get(Organisation, organisation_id)
+        if not organisation:
+            organisation_ns.abort(404, "Organisation not found")
+        return organisation.to_dict()
+
+    @organisation_ns.expect(organisation_model, validate=False)
+    @organisation_ns.marshal_with(organisation_model)
+    def put(self, organisation_id):
+        """Update an organisation."""
+        organisation = db.session.get(Organisation, organisation_id)
+        if not organisation:
+            organisation_ns.abort(404, "Organisation not found")
+        apply_organisation_payload(organisation, request.get_json() or {})
+        commit_or_abort(organisation_ns)
+        return organisation.to_dict()
+
+    @organisation_ns.response(204, "Deleted")
+    def delete(self, organisation_id):
+        """Delete an organisation."""
+        organisation = db.session.get(Organisation, organisation_id)
+        if not organisation:
+            organisation_ns.abort(404, "Organisation not found")
+        db.session.delete(organisation)
+        commit_or_abort(organisation_ns)
+        return "", 204
+
+
+@designation_ns.route("")
+class DesignationListResource(Resource):
+    @designation_ns.marshal_list_with(designation_model)
+    def get(self):
+        """List designations."""
+        return [designation.to_dict() for designation in Designation.query.order_by(Designation.id).all()]
+
+    @designation_ns.expect(designation_model, validate=True)
+    @designation_ns.marshal_with(designation_model, code=201)
+    @designation_ns.response(409, "Duplicate designation", error_model)
+    def post(self):
+        """Create a designation."""
+        payload = request.get_json() or {}
+        designation = Designation()
+        apply_designation_payload(designation, payload)
+        db.session.add(designation)
+        commit_or_abort(designation_ns)
+        return designation.to_dict(), 201
+
+
+@designation_ns.route("/<int:designation_id>")
+@designation_ns.param("designation_id", "Designation id")
+class DesignationResource(Resource):
+    @designation_ns.marshal_with(designation_model)
+    def get(self, designation_id):
+        """Get a designation."""
+        designation = db.session.get(Designation, designation_id)
+        if not designation:
+            designation_ns.abort(404, "Designation not found")
+        return designation.to_dict()
+
+    @designation_ns.expect(designation_model, validate=False)
+    @designation_ns.marshal_with(designation_model)
+    def put(self, designation_id):
+        """Update a designation."""
+        designation = db.session.get(Designation, designation_id)
+        if not designation:
+            designation_ns.abort(404, "Designation not found")
+        apply_designation_payload(designation, request.get_json() or {})
+        commit_or_abort(designation_ns)
+        return designation.to_dict()
+
+    @designation_ns.response(204, "Deleted")
+    def delete(self, designation_id):
+        """Delete a designation."""
+        designation = db.session.get(Designation, designation_id)
+        if not designation:
+            designation_ns.abort(404, "Designation not found")
+        db.session.delete(designation)
+        commit_or_abort(designation_ns)
+        return "", 204
+
+
+@employee_ns.route("")
+class EmployeeListResource(Resource):
+    @employee_ns.marshal_list_with(employee_model)
+    def get(self):
+        """List employees."""
+        organisation_id = request.args.get("organisation_id", type=int)
+        query = Employee.query
+        if organisation_id:
+            query = query.filter(Employee.organisation_id == organisation_id)
+        return [employee.to_dict() for employee in query.order_by(Employee.id).all()]
+
+    @employee_ns.expect(employee_model, validate=True)
+    @employee_ns.marshal_with(employee_model, code=201)
+    @employee_ns.response(409, "Duplicate employee", error_model)
+    def post(self):
+        """Create an employee."""
+        payload = request.get_json() or {}
+        employee = Employee()
+        apply_employee_payload(employee, payload)
+        db.session.add(employee)
+        commit_or_abort(employee_ns)
+        return employee.to_dict(), 201
+
+
+@employee_ns.route("/<int:employee_id>")
+@employee_ns.param("employee_id", "Employee id")
+class EmployeeResource(Resource):
+    @employee_ns.marshal_with(employee_model)
+    def get(self, employee_id):
+        """Get an employee."""
+        employee = db.session.get(Employee, employee_id)
+        if not employee:
+            employee_ns.abort(404, "Employee not found")
+        return employee.to_dict()
+
+    @employee_ns.expect(employee_model, validate=False)
+    @employee_ns.marshal_with(employee_model)
+    def put(self, employee_id):
+        """Update an employee."""
+        employee = db.session.get(Employee, employee_id)
+        if not employee:
+            employee_ns.abort(404, "Employee not found")
+        apply_employee_payload(employee, request.get_json() or {})
+        commit_or_abort(employee_ns)
+        return employee.to_dict()
+
+    @employee_ns.response(204, "Deleted")
+    def delete(self, employee_id):
+        """Delete an employee."""
+        employee = db.session.get(Employee, employee_id)
+        if not employee:
+            employee_ns.abort(404, "Employee not found")
+        db.session.delete(employee)
+        commit_or_abort(employee_ns)
+        return "", 204

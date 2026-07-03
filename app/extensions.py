@@ -1,0 +1,21 @@
+from flask_migrate import Migrate
+from flask_restx import Api
+from flask_sqlalchemy import SQLAlchemy
+
+
+db = SQLAlchemy()
+migrate = Migrate()
+api = Api(
+    title="Rungta Employee API",
+    version="1.0",
+    description="REST API for organisation and employee management.",
+    doc="/swagger",
+    authorizations={
+        "Bearer Auth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Authorization",
+            "description": "Enter: Bearer <access_token>. Raw access tokens are also accepted.",
+        }
+    },
+)

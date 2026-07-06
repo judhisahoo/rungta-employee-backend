@@ -138,7 +138,6 @@ class Employee(TimestampMixin, db.Model):
             "id": self.id,
             "employee_code": self.employee_code,
             "id_card_no": self.id_card_no,
-            "password": self.password,
             "name": self.name,
             "middle_name": self.middle_name,
             "surname": self.surname,

@@ -109,7 +109,7 @@ class EmployeeService:
 
         return {
             "exists": False,
-            "message": "id card no available",
+            "message": "id card no available for use.",
         }
 
     def create_employee(self, payload, strict_validation=False):

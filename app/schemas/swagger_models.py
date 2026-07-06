@@ -53,13 +53,6 @@ def create_employee_model(namespace):
                 required=True,
                 description="Unique employee ID card number.",
             ),
-            "password": fields.String(
-                readonly=True,
-                description=(
-                    "Password is auto-generated from mobile number and stored "
-                    "in base64 format."
-                ),
-            ),
             "name": fields.String(
                 required=True,
                 description="Full name of the employee.",

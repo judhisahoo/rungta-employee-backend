@@ -50,6 +50,12 @@ def normalize_database_uri(database_url):
 
 class Config:
     SQLALCHEMY_DATABASE_URI = build_database_uri()
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_size": 5,
+        "max_overflow": 10,
+        "pool_recycle": 300,
+    }
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     RESTX_MASK_SWAGGER = False
     ERROR_404_HELP = False

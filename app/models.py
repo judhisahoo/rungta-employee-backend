@@ -32,7 +32,7 @@ class Organisation(TimestampMixin, db.Model):
         return {
             "id": self.id,
             "name": self.name,
-            "parent_id": self.parent_id,
+            "parent_id": self.parent_id or 0,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -245,6 +245,7 @@ def create_login_success_model(namespace, employee_model):
         "LoginSuccess",
         {
             "status": fields.Integer,
+            "status_code": fields.Integer,
             "user": fields.Nested(employee_model),
             "access_token": fields.String,
             "refresh_token": fields.String,
@@ -256,7 +257,7 @@ def create_login_error_model(namespace):
     return namespace.model(
         "LoginError",
         {
-            "Status": fields.Integer,
-            "Message": fields.String,
+            "message": fields.String,
+            "status_code": fields.Integer,
         },
     )

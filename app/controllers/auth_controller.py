@@ -30,7 +30,7 @@ class LoginResource(Resource):
     def post(self):
         """Login using email and password."""
         response = auth_service.login(request.get_json() or {})
-        if response.get("Status") == 402:
+        if response.get("status_code") == 402:
             return response, 402
         return response, 200
 
@@ -44,4 +44,4 @@ class RegisterResource(Resource):
         try:
             return auth_service.register(request.get_json() or {}), 201
         except Exception as exc:
-            abort_app_error(auth_ns, exc)
+            return abort_app_error(auth_ns, exc)

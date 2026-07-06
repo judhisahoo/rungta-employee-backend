@@ -1,7 +1,12 @@
+import re
+
 from sqlalchemy.exc import DataError, IntegrityError
 
 from app.extensions import db
 from app.utils.exceptions import BadRequestError, ConflictError
+
+
+UNIQUE_FIELD_RE = re.compile(r"Key \((?P<field>[^)]+)\)=")
 
 
 class BaseRepository:
@@ -25,8 +30,19 @@ class BaseRepository:
             db.session.commit()
         except IntegrityError as exc:
             db.session.rollback()
-            raise ConflictError("Duplicate or invalid data: {}".format(exc.orig))
+            raise ConflictError(format_integrity_error(exc))
         except DataError as exc:
             db.session.rollback()
             raise BadRequestError("Invalid data: {}".format(exc.orig))
 
+
+def format_integrity_error(exc):
+    message = str(exc.orig)
+    match = UNIQUE_FIELD_RE.search(message)
+    if match:
+        field_name = match.group("field").replace("_", " ")
+        return "The {} is already exists, Check the data and try again".format(
+            field_name
+        )
+
+    return "Duplicate or invalid data"

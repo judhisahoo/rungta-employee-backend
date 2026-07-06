@@ -38,18 +38,24 @@ class EmployeeListResource(Resource):
             organisation_id = request.args.get("organisation_id", type=int)
             return employee_service.list_employees(organisation_id)
         except Exception as exc:
-            abort_app_error(employee_ns, exc)
+            return abort_app_error(employee_ns, exc)
 
-    @employee_ns.expect(employee_model, validate=True)
+    @employee_ns.expect(employee_model, validate=False)
     @employee_ns.marshal_with(employee_model, code=201)
     @employee_ns.response(409, "Duplicate employee", error_model)
     @token_required
     def post(self):
         """Create an employee."""
         try:
-            return employee_service.create_employee(request.get_json() or {}), 201
+            return (
+                employee_service.create_employee(
+                    request.get_json() or {},
+                    strict_validation=True,
+                ),
+                201,
+            )
         except Exception as exc:
-            abort_app_error(employee_ns, exc)
+            return abort_app_error(employee_ns, exc)
 
 
 @employee_ns.route("/generate_id")
@@ -62,7 +68,7 @@ class EmployeeGenerateIdResource(Resource):
         try:
             return employee_service.generate_unique_id_card_no()
         except Exception as exc:
-            abort_app_error(employee_ns, exc)
+            return abort_app_error(employee_ns, exc)
 
 
 @employee_ns.route("/validate_id_card_no")
@@ -76,7 +82,7 @@ class EmployeeValidateIdCardNoResource(Resource):
         try:
             return employee_service.validate_id_card_no(request.get_json() or {})
         except Exception as exc:
-            abort_app_error(employee_ns, exc)
+            return abort_app_error(employee_ns, exc)
 
 
 @employee_ns.route("/search")
@@ -92,7 +98,7 @@ class EmployeeSearchResource(Resource):
                 request.get_json() or {}
             )
         except Exception as exc:
-            abort_app_error(employee_ns, exc)
+            return abort_app_error(employee_ns, exc)
 
 
 @employee_ns.route("/search_by_id_card")
@@ -106,7 +112,7 @@ class EmployeeSearchByIdCardResource(Resource):
                 request.get_json() or {}
             )
         except Exception as exc:
-            abort_app_error(employee_ns, exc)
+            return abort_app_error(employee_ns, exc)
 
 
 @employee_ns.route("/<int:employee_id>")
@@ -120,7 +126,7 @@ class EmployeeResource(Resource):
         try:
             return employee_service.get_employee(employee_id)
         except Exception as exc:
-            abort_app_error(employee_ns, exc)
+            return abort_app_error(employee_ns, exc)
 
     @employee_ns.expect(employee_model, validate=False)
     @employee_ns.marshal_with(employee_model)
@@ -131,9 +137,10 @@ class EmployeeResource(Resource):
             return employee_service.update_employee(
                 employee_id,
                 request.get_json() or {},
+                strict_validation=True,
             )
         except Exception as exc:
-            abort_app_error(employee_ns, exc)
+            return abort_app_error(employee_ns, exc)
 
     @employee_ns.response(204, "Deleted")
     @token_required
@@ -143,4 +150,4 @@ class EmployeeResource(Resource):
             employee_service.delete_employee(employee_id)
             return "", 204
         except Exception as exc:
-            abort_app_error(employee_ns, exc)
+            return abort_app_error(employee_ns, exc)

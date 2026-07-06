@@ -1,6 +1,7 @@
 from app.models import Designation
 from app.repositories.designation_repository import DesignationRepository
-from app.utils.exceptions import NotFoundError
+from app.utils.exceptions import NotFoundError, ValidationError
+from app.utils.validators import is_blank, normalize_blank
 
 
 class DesignationService:
@@ -41,6 +42,8 @@ class DesignationService:
         return designation
 
     def _apply_payload(self, designation, payload):
-        if "name" in payload:
-            designation.name = payload["name"]
+        name = normalize_blank(payload.get("name", designation.name))
+        if is_blank(name):
+            raise ValidationError("Designation name is required")
 
+        designation.name = name

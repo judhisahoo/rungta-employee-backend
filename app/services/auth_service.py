@@ -28,6 +28,7 @@ class AuthService:
         user = employee.to_dict()
         return {
             "status": 200,
+            "status_code": 200,
             "user": user,
             "access_token": self._build_token(employee, "access"),
             "refresh_token": self._build_token(employee, "refresh"),
@@ -70,7 +71,6 @@ class AuthService:
 
     def _invalid_credentials_response(self):
         return {
-            "Status": 402,
-            "Message": "Invalid credential",
+            "message": "Invalid credential",
+            "status_code": 402,
         }
-

@@ -28,9 +28,9 @@ class DesignationListResource(Resource):
         try:
             return designation_service.list_designations()
         except Exception as exc:
-            abort_app_error(designation_ns, exc)
+            return abort_app_error(designation_ns, exc)
 
-    @designation_ns.expect(designation_model, validate=True)
+    @designation_ns.expect(designation_model, validate=False)
     @designation_ns.marshal_with(designation_model, code=201)
     @designation_ns.response(409, "Duplicate designation", error_model)
     @token_required
@@ -39,7 +39,7 @@ class DesignationListResource(Resource):
         try:
             return designation_service.create_designation(request.get_json() or {}), 201
         except Exception as exc:
-            abort_app_error(designation_ns, exc)
+            return abort_app_error(designation_ns, exc)
 
 
 @designation_ns.route("/<int:designation_id>")
@@ -53,7 +53,7 @@ class DesignationResource(Resource):
         try:
             return designation_service.get_designation(designation_id)
         except Exception as exc:
-            abort_app_error(designation_ns, exc)
+            return abort_app_error(designation_ns, exc)
 
     @designation_ns.expect(designation_model, validate=False)
     @designation_ns.marshal_with(designation_model)
@@ -66,7 +66,7 @@ class DesignationResource(Resource):
                 request.get_json() or {},
             )
         except Exception as exc:
-            abort_app_error(designation_ns, exc)
+            return abort_app_error(designation_ns, exc)
 
     @designation_ns.response(204, "Deleted")
     @token_required
@@ -76,4 +76,4 @@ class DesignationResource(Resource):
             designation_service.delete_designation(designation_id)
             return "", 204
         except Exception as exc:
-            abort_app_error(designation_ns, exc)
+            return abort_app_error(designation_ns, exc)

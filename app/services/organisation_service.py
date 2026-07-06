@@ -1,6 +1,7 @@
 from app.models import Organisation
 from app.repositories.organisation_repository import OrganisationRepository
 from app.utils.exceptions import NotFoundError, ValidationError
+from app.utils.validators import is_blank, normalize_blank
 
 
 class OrganisationService:
@@ -43,11 +44,11 @@ class OrganisationService:
         return organisation
 
     def _apply_payload(self, organisation, payload):
-        if "name" in payload:
-            organisation.name = payload["name"]
+        name = normalize_blank(payload.get("name", organisation.name))
+        if is_blank(name):
+            raise ValidationError("Organisation name is required")
 
-        if "parent_id" not in payload:
-            return
+        organisation.name = name
 
         parent_id = payload.get("parent_id")
         if parent_id in (0, "", None):
@@ -61,4 +62,3 @@ class OrganisationService:
             raise NotFoundError("Parent organisation not found")
 
         organisation.parent_id = parent_id
-

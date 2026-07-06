@@ -52,6 +52,7 @@ class Config:
     SQLALCHEMY_DATABASE_URI = build_database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     RESTX_MASK_SWAGGER = False
+    ERROR_404_HELP = False
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key")
     JWT_ACCESS_TOKEN_EXPIRES_MINUTES = int(
         os.getenv("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", "60")

@@ -28,9 +28,9 @@ class OrganisationListResource(Resource):
         try:
             return organisation_service.list_organisations()
         except Exception as exc:
-            abort_app_error(organisation_ns, exc)
+            return abort_app_error(organisation_ns, exc)
 
-    @organisation_ns.expect(organisation_model, validate=True)
+    @organisation_ns.expect(organisation_model, validate=False)
     @organisation_ns.marshal_with(organisation_model, code=201)
     @organisation_ns.response(409, "Duplicate organisation", error_model)
     @token_required
@@ -39,7 +39,7 @@ class OrganisationListResource(Resource):
         try:
             return organisation_service.create_organisation(request.get_json() or {}), 201
         except Exception as exc:
-            abort_app_error(organisation_ns, exc)
+            return abort_app_error(organisation_ns, exc)
 
 
 @organisation_ns.route("/<int:organisation_id>")
@@ -53,7 +53,7 @@ class OrganisationResource(Resource):
         try:
             return organisation_service.get_organisation(organisation_id)
         except Exception as exc:
-            abort_app_error(organisation_ns, exc)
+            return abort_app_error(organisation_ns, exc)
 
     @organisation_ns.expect(organisation_model, validate=False)
     @organisation_ns.marshal_with(organisation_model)
@@ -66,7 +66,7 @@ class OrganisationResource(Resource):
                 request.get_json() or {},
             )
         except Exception as exc:
-            abort_app_error(organisation_ns, exc)
+            return abort_app_error(organisation_ns, exc)
 
     @organisation_ns.response(204, "Deleted")
     @token_required
@@ -76,4 +76,4 @@ class OrganisationResource(Resource):
             organisation_service.delete_organisation(organisation_id)
             return "", 204
         except Exception as exc:
-            abort_app_error(organisation_ns, exc)
+            return abort_app_error(organisation_ns, exc)
